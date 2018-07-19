@@ -1,11 +1,11 @@
 # Profile information
-name: My Blog
+name: Forde
 title: Michael Forde's Blog
 description: > # this means to ignore newlines until "baseurl:"
   This I my first blog, this will be more of a technical journal
 permalink: ':title/'
-baseurl: "/blog" # the subpath of your site, e.g. /blog
-url: "http://blog.fordetek.ie" # the base hostname & protocol for your site, e.g. http://example.com
+baseurl: "" # the subpath of your site, e.g. /blog
+url: "http://www.forde.blog" # the base hostname & protocol for your site, e.g. http://example.com
 
 # Social
 facebook: michael.forde.3139
