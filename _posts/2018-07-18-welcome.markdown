@@ -1,0 +1,29 @@
+---
+layout: post
+title:  "Welcome to My Blog!"
+date:   18-07-2018 22:26:40 +0200
+img:
+description: You’ll find this post in your `_posts` directory. Go ahead and edit it and re-build the site to see your changes.
+categories: rambling
+comments: true
+github: arch
+gitdownload: arch/archive/master.tar.gz
+---
+This is my first post on my blog.
+This blog will mostly be an technical journal of my projects.
+For some blogs I will also provide youtube videos as tutorals or/and demonstations.
+
+
+
+I am using [Jekyll][jekyll] to create this website, heres my [repo][repo]
+
+{% highlight ruby %}
+greeting = 'Hello world'
+
+for letter in greeting:
+  print('letter')
+{% endhighlight %}
+
+
+[jekyll]: https://jekyllrb.com/
+[repo]: https://github.com/fordetek/blog_jekyll
