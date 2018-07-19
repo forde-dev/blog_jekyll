@@ -1,2 +1,7 @@
 # blog_jekyll
-my blog website
+This is my blog website [forde.blog][blog]
+
+
+
+
+[blog]: http://www.forde.blog/
