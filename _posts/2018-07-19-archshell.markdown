@@ -114,7 +114,7 @@ DRIVE="/dev/sda"
 KEYMAP="uk"
 
 # set up what packages need to be installed (also more on this below)
-PKG="base base-devel refind-efi wireless_tools nfs-utils ntfs-3g openssh pkgfile pacman-contrib mlocate mlocate alsa-utils bash-completion rsync"
+PKG="base base-devel grub wireless_tools nfs-utils ntfs-3g openssh pkgfile pacman-contrib mlocate mlocate alsa-utils bash-completion rsync"
 {% endhighlight %}
 
 In the above variables you can set them all to suit your own preference.
@@ -284,7 +284,276 @@ mkswap ${DRIVE}2
 swapon ${DRIVE}2
 {% endhighlight %}
 
+Notice how the ROOT and EFI partitions are mounted to ***/mnt***, this is short for ***mount***,
+this allows you to use the tools on the existing system to setup the file structure for the new system before using it.
+Also you have to manually create the ***/mnt/boot/efi*** as seen above.
 
+## 4. Step Four.
+
+#### Downloading packages and installing,
+
+First we will install [**reflector**][reflector], this will allow us to download from the most efficient mirrors for the fastest download,
+
+{% highlight ruby %}
+# ths installs reflector
+echo "Downloading and Install reflector installation requirements"
+pacman -Sy --noconfirm --needed reflector
+
+# this downloads and sort Mirrors List from Archlinux.org
+echo "Downloading and Ranking mirrors"
+reflector --verbose --protocol http --latest 200 --number 20 --sort rate --save /etc/pacman.d/mirrorlist
+
+# this updates the database
+pacman -Syy
+{% endhighlight %}
+
+Also in ArchLinux the default package manager is [**Pacman**][pacman] as seen above.
+Now its time to install the main system,
+
+{% highlight ruby %}
+# this installs all the packages that we have in our PKG variable
+echo "# Installing Main System"
+pacstrap /mnt ${PKG}
+
+{% endhighlight %}
+
+The most important package to install is the [***base***][base], we have that in the PKG variable up above.
+Now lets create the [***Fstab***][fstab], which is what tell arch what drives to mount when it starts up,
+installing ***fstab*** is done by the following,
+
+{% highlight ruby %}
+# this imstalls the Fstab
+echo "# Creating Fstab Entrys"
+genfstab -U /mnt >> /mnt/etc/fstab
+{% endhighlight %}
+
+## 5. Step Five.
+
+#### Final Configuration for **base.sh**,
+
+To finish off the **base.sh** script we must do some configurations and then [***arch-chroot***][chroot] (this means change root) to the new root
+ROOT directory we created, But now we must configure the network settings,
+
+{% highlight ruby %}
+# this configures the network
+echo "Configuring Network"
+rm /mnt/etc/resolv.conf
+ln -sf "/run/systemd/resolve/stub-resolv.conf" /mnt/etc/resolv.conf
+cat > /mnt/etc/systemd/network/20-wired.network <<NET_EOF
+[Match]
+Name=en*
+[Network]
+DHCP=ipv4
+NET_EOF
+{% endhighlight %}
+
+Now we must set a console keymap by adding youe KEYMAP settings to ***/mnt/etc/vconsole.conf***,
+
+{% highlight ruby %}
+# this sets the console keymap
+echo "Setting KEYMAP"
+echo "KEYMAP=$KEYMAP" >> /mnt/etc/vconsole.conf
+{% endhighlight %}
+
+We can set the hostname now by adding the HOSTNAME variable to the ***/mnt/etc/hostname***,
+
+{% highlight ruby %}
+# this sets Hostname
+echo "Setting Hostname"
+echo "${HOSTNAME}" > /mnt/etc/hostname
+{% endhighlight %}
+
+To set the loaction to your own country you will have to follow my example, it come defaultly set to US
+but im my example i show how to change it to ireland, its the same for everyother country, im using a editor called
+***sed*** in this and using the operator ***-i*** to insert text,
+
+{% highlight ruby %}
+# this sets the location to ireland
+echo "Setting Locale to en_IE"
+
+# this changes the locale to
+sed -i 's/^en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
+sed -i 's/^#en_IE.UTF-8/en_IE.UTF-8/' /etc/locale.gen
+
+# this sets the language to english
+echo "LANG=en_IE.UTF-8" > /etc/locale.conf
+
+export LANG=en_IE.UTF-8
+locale-gen
+echo ""
+{% endhighlight %}
+
+To learn more about locale go [here][locale]
+Now to set the time zone, this example used ireland again,
+
+{% highlight ruby %}
+# this sets Timezone
+echo "Setting Timezone"
+ln -sf "/usr/share/zoneinfo/Europe/Dublin" /mnt/etc/localtime
+{% endhighlight %}
+
+Next i will enable the network services with [***systemctl***][sysctl] to that it starts on startup,
+
+{% highlight ruby %}
+# this enables required services for the network
+echo "Setting up Systemd Services"
+arch-chroot /mnt systemctl enable systemd-networkd.service systemd-resolved.service
+{% endhighlight %}
+
+We must also install [***grub***][grub] with the following,
+
+{% highlight ruby %}
+# this installs grub
+arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=esp --bootloader-id=Archlinux
+# this configures grub
+arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+{% endhighlight %}
+
+Lets now go a head and add in the [***arch-chroot***][chroot] and make it run **post.sh** and we must aslso copy these files over to the new
+ROOT,
+
+{% highlight ruby %}
+# this copys the post.sh to the new ROOT and runs it
+cp post.sh /mnt/root/
+arch-chroot /mnt sh /root/post.sh ${ROOTPASSWORD} ${USERNAME} ${USERPASSWORD}
+rm /mnt/root/post.sh
+{% endhighlight %}
+
+In the **post.sh** we will be configuring the root password and username and password so thats why we are carrying these
+variables over.
+Now to finish off the **base.sh** we must unmount our drives and give a finnishing note to tell the user that they are to
+restart there pc.
+
+{% highlight ruby %}
+# this unmounts all the mounted drives
+echo "Unmounting Drive Partitions"
+
+# this unmounts the Swap
+swapoff ${DRIVE}2
+
+# this unmounts the EFI
+umount /mnt/boot/efi
+
+# this unmounts the ROOT
+umount /mnt
+{% endhighlight %}
+
+And now for a simple finishing note,
+
+{% highlight ruby %}
+echo ""
+echo "Finised Core Install"
+echo
+echo
+echo
+echo "After reboot login as your user"
+{% endhighlight %}
+
+Finally, we have the **base.sh** script finished.
+
+## 6. Step Six.
+
+#### Configuration on the post.sh,
+
+Now open your **post.sh** that you have make earlyier and aslready initialised,
+first we must take in the variables we sent to it in the **base.sh**, make sure to have them at the
+same order that your put them in, like this,
+
+{% highlight ruby %}
+# this gives the script the variables
+ROOTPASSWORD=$1
+USERNAME=$2
+USERPASSWORD=$3
+{% endhighlight %}
+
+Lets do some updating,
+
+{% highlight ruby %}
+# this basically updates all the following
+echo "updating"
+locale-gen
+hwclock --systohc
+pacman-key --populate archlinux
+pacman-key --init
+updatedb
+pkgfile --update
+{% endhighlight %}
+
+Add this to give a splash of colour,
+
+{% highlight ruby %}
+# this adds colour
+echo "adding colour"
+sed -i 's/#Color/Color/' /etc/pacman.conf
+{% endhighlight %}
+
+Now we will set up the user details and passwords for both user and root,
+
+{% highlight ruby %}
+# this sets up the root password
+echo "creating Root password"
+echo -e "${ROOTPASSWORD}\n${ROOTPASSWORD}" | passwd root
+
+# this sets up the user
+useradd -m -G wheel,users -s /bin/bash ${USERNAME}
+
+# this sets up the user password
+echo -e "${USERPASSWORD}\n${USERPASSWORD}" | passwd ${USERNAME}
+
+# this adds the the user to group for sudo
+echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/10_wheel
+chmod 640 /etc/sudoers.d/10_wheel
+{% endhighlight %}
+
+Add this for creating missing directorys,
+
+{% highlight ruby %}
+# this creates any missing directories
+mkdir -p /etc/pacman.d/hooks
+{% endhighlight %}
+
+Now lets give user sudo access,
+
+{% highlight ruby %}
+# Change sudoers to allow nobody user access to sudo without password
+echo 'nobody ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/99_nobody
+{% endhighlight %}
+
+Next build directorys and set there permissions, the [***chmod***][chmod] is used to set permissions,
+the [***chgrp***][chgrp] is used to change the group and ***setfacl*** modifies the access control list (**ACL**),the
+operator ***-m*** modifies the ACL specified by the **EntryOrFile**,
+
+{% highlight ruby %}
+# this creates directorys and set permissions
+mkdir /tmp/build
+chgrp nobody /tmp/build
+chmod g+ws /tmp/build
+setfacl -m u::rwx,g::rwx /tmp/build
+setfacl -d --set u::rwx,g::rwx,o::- /tmp/build
+cd /tmp/build/
+{% endhighlight %}
+
+Now lets create the [**AUR**][aur] helper, I will be using [***yay***][yay], this is written in [***GO***][go],
+if you install this it can be your one and only packet manager.
+
+{% highlight ruby %}
+# Install Yay AUR Helper
+sudo -u nobody curl -SLO https://aur.archlinux.org/cgit/aur.git/snapshot/yay.tar.gz
+sudo -u nobody tar -zxvf yay.tar.gz
+cd yay
+sudo -u nobody makepkg -s -i --noconfirm
+cd ../..
+rm -r build
+{% endhighlight %}
+
+Finally we will edit the ***sudoers.d*** again and allow wheel group access to sudo with password,
+
+{% highlight ruby %}
+# Change sudoers to allow wheel group access to sudo with password
+rm /etc/sudoers.d/99_nobody
+{% endhighlight %}
+
+Yay!! we have just finished creating the scripts needed to install ArchLinux,
 
 
 
@@ -294,3 +563,16 @@ swapon ${DRIVE}2
 [notpad]: https://notepad-plus-plus.org/download/v7.5.7.html
 [lsblk]: ../assets/img/lsblk.png
 [packages]: https://git.archlinux.org/archiso.git/tree/configs/releng/packages.x86_64
+[reflector]: https://wiki.archlinux.org/index.php/reflector
+[pacman]: https://wiki.archlinux.org/index.php/pacman
+[base]: https://www.archlinux.org/groups/x86_64/base/
+[fstab]: https://wiki.archlinux.org/index.php/fstab
+[chroot]: https://wiki.archlinux.org/index.php/Change_root
+[locale]: https://wiki.archlinux.org/index.php/Locale
+[sysctl]: https://wiki.archlinux.org/index.php/systemd
+[grub]: https://wiki.archlinux.org/index.php/GRUB
+[chmod]: https://wiki.archlinux.org/index.php/File_permissions_and_attributes#Changing_permissions
+[chgrp]: https://www.computerhope.com/unix/uchgrp.html
+[aur]: https://aur.archlinux.org/
+[yay]: https://github.com/Jguer/yay
+[go]: https://golang.org/
