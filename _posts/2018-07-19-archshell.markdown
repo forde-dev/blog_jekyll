@@ -554,6 +554,7 @@ rm /etc/sudoers.d/99_nobody
 {% endhighlight %}
 
 Yay!! we have just finished creating the scripts needed to install ArchLinux,
+now just upload it to github 
 
 
 
